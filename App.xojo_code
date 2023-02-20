@@ -63,7 +63,8 @@ Inherits ConsoleApplication
 		  #Pragma Unused Response
 		  
 		  // Hello, world demo.
-		  'DemoHelloWorld.RequestProcess(Request)
+		  DemoHelloWorld.RequestProcess(Request)
+		  
 		  // Or simply...
 		  'Request.Response.Content = "Hello, world!"
 		  

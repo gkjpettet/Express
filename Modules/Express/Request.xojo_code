@@ -113,8 +113,27 @@ Inherits SSLSocket
 		  ///
 		  /// Typically, this will be a 102 error, where the client has closed the connection.
 		  
-		  If err.ErrorNumber <> 102 Then
+		  Select Case err.ErrorNumber
+		    
+		  Case 102
+		    
+		    System.DebugLog "Socket " + SocketID.totext + ": Disconnected / LostConnection"
+		    
+		    If Multithreading And (Me.RequestThread <> Nil) And (Me.RequestThread.ThreadState <> Thread.ThreadStates.NotRunning) Then
+		      System.DebugLog "Socket " + SocketID.totext + ": Killing RequestThread"
+		      Me.RequestThread.Stop
+		    End If
+		    
+		    Me.Close
+		    
+		  Else
+		    
 		    System.DebugLog "Socket " + SocketID.ToString + " Error: " + err.ErrorNumber.ToString
+		    
+		  End Select
+		  
+		  If err.ErrorNumber <> 102 Then
+		    
 		  End If
 		End Sub
 	#tag EndEvent
@@ -129,18 +148,18 @@ Inherits SSLSocket
 		  If KeepAlive = False Then
 		    // Close the connection.
 		    Close
+		    Return
 		  End If
 		  
 		  // If this was a multipart form...
 		  If ContentType.Split("multipart/form-data").LastIndex = 1 Then
 		    // Close the connection.
 		    Close
+		    Return
 		  End If
 		  
 		  // Reset the socket's properties.
 		  Reset
-		  
-		  
 		  
 		End Sub
 	#tag EndEvent
@@ -216,6 +235,8 @@ Inherits SSLSocket
 	#tag Method, Flags = &h0, Description = 436C6F7365732074686520736F636B657420616E642072657365747320637573746F6D2070726F706572746965732E
 		Sub Close()
 		  /// Closes the socket and resets custom properties.
+		  
+		  System.DebugLog "Socket " + SocketID.totext + ": Close"
 		  
 		  Reset
 		  
@@ -887,17 +908,28 @@ Inherits SSLSocket
 		  /// Called (1) by a RequestThread's Run event handler, if multithreading is enabled and 
 		  /// (2) by the DataAvailable event handler, if multithreading is disabled.
 		  
-		  // Create the POST and Files dictionaries.
-		  BodyProcess
-		  
-		  // Hand the request off to the RequestHandler.
-		  App.RequestHandler(Self, Self.Response)
-		  
-		  // Return the response.
-		  ResponseReturn
-		  
-		  // Reset the data received counter. 
-		  DataReceivedCount = 0
+		  Try
+		    // Create the POST and Files dictionaries.
+		    BodyProcess
+		    
+		    // Hand the request off to the RequestHandler.
+		    App.RequestHandler(Self, Self.Response)
+		    
+		  Catch err As ThreadEndException
+		    
+		    //RequestThread has been killed
+		    DataReceivedCount = 0
+		    Return
+		    
+		  Finally
+		    
+		    // Return the response.
+		    ResponseReturn
+		    
+		    // Reset the data received counter. 
+		    DataReceivedCount = 0
+		    
+		  End Try
 		  
 		End Sub
 	#tag EndMethod
@@ -937,6 +969,7 @@ Inherits SSLSocket
 		  PathComponents = Nil
 		  POST = Nil
 		  Response = Nil
+		  RequestThread = Nil
 		  Session = Nil
 		  StaticPath = Nil
 		  URLParams = ""
@@ -1259,33 +1292,39 @@ Inherits SSLSocket
 
 	#tag Method, Flags = &h0, Description = 4576616C75617465732074686520636F6E74656E74206F6620603C786F6A6F7363726970743E3C2F786F6A6F7363726970743E6020617320586F6A6F5363726970742C207265706C6163696E672074686520636F6E74656E7420776974682074686520726573756C7473206F6620746865207363726970742E
 		Sub XojoScriptsParse()
-		  /// Evaluates the content of `<xojoscript></xojoscript>` as XojoScript, replacing the content with the results of the script.
-		  
-		  // Determine the number of scripts in the content.
-		  Var scripts() As String = Response.Content.Split("<xojoscript>")
-		  
-		  // If there are no scripts in the content.
-		  If scripts.LastIndex = 0 Then
-		    Return
-		  End If
-		  
-		  // Create an instance of the XojoScript evaluator.
-		  Var evaluator As New XSProcessor
-		  
-		  // Loop over the XojoScript blocks.
-		  Var lastScriptsIndex As Integer = scripts.LastIndex
-		  For x As Integer = 0 To lastScriptsIndex
+		  #If XojoScriptAvailable Then
 		    
-		    // Get the next XojoScript block.
-		    evaluator.Source = Express.BlockGet(Response.Content, "<xojoscript>", "</xojoscript>", 0)
+		    // Evaluates the content of `<xojoscript></xojoscript>` as XojoScript,
+		    // replacing the content with the results of the script.
 		    
-		    // Run the XojoScript.
-		    evaluator.Run
+		    // Determine the number of scripts in the content.
+		    Var scripts() As String = Response.Content.Split("<xojoscript>")
 		    
-		    // Replace the block with the result.
-		    Response.Content = Express.BlockReplace(Response.Content, "<xojoscript>", "</xojoscript>", 0, evaluator.Result)
+		    // If there are no scripts in the content.
+		    If scripts.LastIndex = 0 Then
+		      Return
+		    End If
 		    
-		  Next x
+		    // Create an instance of the XojoScript evaluator.
+		    Var evaluator As New XSProcessor
+		    
+		    // Loop over the XojoScript blocks.
+		    Var lastScriptsIndex As Integer = scripts.LastIndex
+		    For x As Integer = 0 To lastScriptsIndex
+		      
+		      // Get the next XojoScript block.
+		      evaluator.Source = Express.BlockGet(Response.Content, "<xojoscript>", "</xojoscript>", 0)
+		      
+		      // Run the XojoScript.
+		      evaluator.Run
+		      
+		      // Replace the block with the result.
+		      Response.Content = Express.BlockReplace(Response.Content, "<xojoscript>", "</xojoscript>", 0, evaluator.Result)
+		      
+		    Next x
+		    
+		  #EndIf
+		  
 		End Sub
 	#tag EndMethod
 
@@ -1430,7 +1469,7 @@ Inherits SSLSocket
 	#tag EndProperty
 
 	#tag Property, Flags = &h0, Description = 5468697320736F636B657427732049442E
-		SocketID As Integer
+		SocketID As UInteger
 	#tag EndProperty
 
 	#tag Property, Flags = &h0, Description = 546865206C6F636174696F6E206F66207374617469632066696C65732E
@@ -1581,7 +1620,7 @@ Inherits SSLSocket
 			Visible=false
 			Group="Behavior"
 			InitialValue=""
-			Type="Integer"
+			Type="UInteger"
 			EditorType=""
 		#tag EndViewProperty
 		#tag ViewProperty

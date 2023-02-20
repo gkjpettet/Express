@@ -863,13 +863,14 @@ Protected Module Express
 		  Var output As String
 		  
 		  Select Case s
+		    
 		  Case SSLSocket.SSLConnectionTypes.SSLv23
 		    
-		    output = "SSL version 3"
+		    output = "SSLv3, TLSv1, TLSv1.1, TLSv1.2"
 		    
 		  Case SSLSocket.SSLConnectionTypes.TLSv1
 		    
-		    output = "TLS version 1" 
+		    output = "TLS version 1"
 		    
 		  Case SSLSocket.SSLConnectionTypes.TLSv11
 		    
@@ -1439,6 +1440,24 @@ Protected Module Express
 		- Removed a few Xojo deprecations.
 		- Local variables now all begin with a lowercase letter.
 		- Refactored a few string concatenating methods to use the faster String.FromArray method.
+		
+	#tag EndNote
+
+	#tag Note, Name = 5.0.3
+		- Fix Description of SSLConnectionTypes
+		- Server.CurrentSocketID and Request.SocketID: UInteger
+		- Fix Conditional Compilation of XSProcessor
+		  - XojoScriptAvailable=False: XSProcessor should not be compiled and causing the app to include XojoScript Libs
+		- Request, Event "Error (102)": If Multithreading then kill the still running Thread
+		  - otherwise processing in this Thread continues and uses resources, even though no response
+		    is required and possible –> blocking processing power for other Requests
+		- Request, Event "SendComplete": Close and Return
+		  - Close calls "Reset", so no need to call it twice
+		  - should both conditions be true, this would lead to calling super.Close 2x
+		- Request, Method "Process": Try-Catch a possible ThreadEndException
+		  - If the Thread gets killed, we'll notice that here, and can safely 'return'
+		    without having to send or do anything
+		- Request, Method "Reset": Also set RequestThread = nil
 		
 	#tag EndNote
 
